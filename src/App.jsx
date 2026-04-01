@@ -158,7 +158,7 @@ const typeColors = { Reaction: T.or, Tutorial: T.bl2, HotTake: T.red, Surprise: 
 // ═══════════════════════════════════
 // SHORTS CLIPPER
 // ═══════════════════════════════════
-function ShortsClipper({ onCreateThumb }) {
+function ShortsClipper({ onCreateThumb, onSave }) {
   const [url, setUrl] = useState("");
   const [transcript, setTranscript] = useState("");
   const [mode, setMode] = useState("url");
@@ -194,7 +194,7 @@ Return JSON: {"videoTitle":"title based on transcript content","clips":[{"clipNu
         ? "You are the world's #1 YouTube Shorts strategist. You are analyzing a REAL transcript. Use ACTUAL quotes and moments from the transcript. Be extremely specific. Valid JSON only."
         : "World's #1 Shorts strategist. Valid JSON only."
     );
-    if (data) { setResult(data); } else { setResult(demoShorts(url || "your video")); setDemo(true); }
+    if (data) { setResult(data); if (onSave) onSave(data); } else { setResult(demoShorts(url || "your video")); setDemo(true); if (onSave) onSave(demoShorts(url || "your video")); }
     setLd(false);
   }
 
@@ -399,7 +399,7 @@ Return JSON: {"videoTitle":"title based on transcript content","clips":[{"clipNu
 // ═══════════════════════════════════
 // GENERIC AI PAGE
 // ═══════════════════════════════════
-function AIPage({ title, icon, desc, placeholder, prompt, sys, btnText, quickPicks, fallback, renderResult }) {
+function AIPage({ title, icon, desc, placeholder, prompt, sys, btnText, quickPicks, fallback, renderResult, onSave }) {
   const [q, setQ] = useState("");
   const [ld, setLd] = useState(false);
   const [r, setR] = useState(null);
@@ -409,7 +409,7 @@ function AIPage({ title, icon, desc, placeholder, prompt, sys, btnText, quickPic
     if (!q.trim()) return;
     setLd(true); setR(null); setDemo(false);
     const { data, error } = await askClaude(prompt(q), sys);
-    if (data) { setR(data); } else { setR(fallback ? fallback(q) : null); setDemo(true); }
+    if (data) { setR(data); if (onSave) onSave(data); } else { const fb = fallback ? fallback(q) : null; setR(fb); setDemo(true); if (onSave && fb) onSave(fb); }
     setLd(false);
   }
 
@@ -928,7 +928,7 @@ function ThumbnailMaker({ preset, onPresetUsed }) {
 // ═══════════════════════════════════
 // VIDEO AUDIT WITH TRANSCRIPT
 // ═══════════════════════════════════
-function VideoAuditPage() {
+function VideoAuditPage({ onSave }) {
   const [url, setUrl] = useState("");
   const [transcript, setTranscript] = useState("");
   const [mode, setMode] = useState("url");
@@ -952,7 +952,7 @@ Return JSON: {"videoTitle":"actual title from content","scores":{"overall":0-100
       : `Analyze "${url}" for organic growth. Return JSON: {"videoTitle":"title","scores":{"overall":0-100,"ctr":0-100,"hook":0-100,"pacing":0-100,"cta":0-100,"seo":0-100},"titleRewrites":["t1","t2","t3"],"hookFix":"fix","thumbnailIdeas":["i1","i2","i3"],"retentionRisks":[{"time":"X:XX","issue":"desc"}],"endScreenStrategy":"rec","ctaFix":"fix","topPriority":"#1 change","freeDistribution":"3 places"}`;
 
     const { data } = await askClaude(prompt, hasT ? "Aggressive YouTube strategist analyzing REAL transcript. Be extremely specific. Valid JSON only." : "Aggressive YouTube organic strategist. Valid JSON only.");
-    if (data) { setR(data); } else { setR(demoAudit(url || "your video")); setDemo(true); }
+    if (data) { setR(data); if (onSave) onSave(data); } else { setR(demoAudit(url || "your video")); setDemo(true); if (onSave) onSave(demoAudit(url || "your video")); }
     setLd(false);
   }
 
@@ -1006,23 +1006,400 @@ Return JSON: {"videoTitle":"actual title from content","scores":{"overall":0-100
 }
 
 // ═══════════════════════════════════
+// CAMPAIGN STORAGE
+// ═══════════════════════════════════
+function saveCampaign(type, data) {
+  try {
+    const campaigns = JSON.parse(localStorage.getItem("zupi_campaigns") || "[]");
+    const campaign = {
+      id: Date.now().toString(),
+      type,
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      timestamp: Date.now(),
+      data
+    };
+    campaigns.unshift(campaign);
+    if (campaigns.length > 50) campaigns.length = 50;
+    localStorage.setItem("zupi_campaigns", JSON.stringify(campaigns));
+    return campaign.id;
+  } catch (e) { console.error("Save error:", e); return null; }
+}
+
+function getCampaigns() {
+  try { return JSON.parse(localStorage.getItem("zupi_campaigns") || "[]"); }
+  catch { return []; }
+}
+
+function deleteCampaign(id) {
+  try {
+    const campaigns = getCampaigns().filter(c => c.id !== id);
+    localStorage.setItem("zupi_campaigns", JSON.stringify(campaigns));
+  } catch (e) { console.error(e); }
+}
+
+const typeIcons = { shorts: "✂️", audit: "🔍", demand: "📡", viral: "🧬", compete: "🎯" };
+const typeLabels = { shorts: "Shorts Clipper", audit: "Video Audit", demand: "Demand Scan", viral: "Viral Patterns", compete: "Competitor Analysis" };
+const typeColors2 = { shorts: T.pk, audit: T.bl2, demand: T.cy, viral: T.pu, compete: T.red };
+
+// ═══════════════════════════════════
+// CAMPAIGNS PAGE
+// ═══════════════════════════════════
+function CampaignsPage({ onView }) {
+  const [campaigns, setCampaigns] = useState(getCampaigns());
+  const [filter, setFilter] = useState("all");
+  const [confirm, setConfirm] = useState(null);
+
+  function handleDelete(id) {
+    deleteCampaign(id);
+    setCampaigns(getCampaigns());
+    setConfirm(null);
+  }
+
+  function handleClearAll() {
+    localStorage.removeItem("zupi_campaigns");
+    setCampaigns([]);
+    setConfirm(null);
+  }
+
+  const filtered = filter === "all" ? campaigns : campaigns.filter(c => c.type === filter);
+
+  return (
+    <div style={{ maxWidth: 920, margin: "0 auto", padding: "20px 14px 80px" }}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <span style={{ fontSize: 20 }}>📂</span>
+          <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 19, fontWeight: 800 }}>My Campaigns</h2>
+          <Badge c={T.gr} g={T.gg}>{campaigns.length} SAVED</Badge>
+        </div>
+        <p style={{ fontSize: 12, color: T.tm }}>All your past analyses saved automatically. Click any campaign to view the full results.</p>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        {[["all", "All"], ["shorts", "✂️ Shorts"], ["audit", "🔍 Audits"], ["demand", "📡 Demand"], ["viral", "🧬 Patterns"], ["compete", "🎯 Compete"]].map(([k, l]) => (
+          <button key={k} onClick={() => setFilter(k)} style={{
+            padding: "5px 12px", borderRadius: 6, border: `1px solid ${filter === k ? T.red + "44" : T.b}`,
+            background: filter === k ? T.rg : "transparent", color: filter === k ? T.red : T.tm,
+            fontSize: 11, fontWeight: 500, cursor: "pointer"
+          }}>{l}</button>
+        ))}
+        {campaigns.length > 0 && (
+          <button onClick={() => setConfirm("all")} style={{
+            marginLeft: "auto", padding: "5px 12px", borderRadius: 6, border: `1px solid ${T.b}`,
+            background: "transparent", color: T.td, fontSize: 10, cursor: "pointer"
+          }}>🗑️ Clear all</button>
+        )}
+      </div>
+
+      {/* Confirm clear all */}
+      {confirm === "all" && (
+        <Card style={{ background: T.rg, borderColor: T.red + "33", marginBottom: 12 }}>
+          <p style={{ fontSize: 12, color: T.t, marginBottom: 8 }}>Delete all campaigns? This can't be undone.</p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={handleClearAll} style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: T.red, color: "#FFF", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Yes, delete all</button>
+            <button onClick={() => setConfirm(null)} style={{ padding: "6px 14px", borderRadius: 6, border: `1px solid ${T.b}`, background: "transparent", color: T.tm, fontSize: 11, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </Card>
+      )}
+
+      {/* Empty state */}
+      {filtered.length === 0 && (
+        <Card style={{ textAlign: "center", padding: "40px 20px" }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
+          <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
+            {campaigns.length === 0 ? "No campaigns yet" : "No " + (typeLabels[filter] || "") + " campaigns"}
+          </h3>
+          <p style={{ fontSize: 12, color: T.tm }}>
+            {campaigns.length === 0 ? "Run your first analysis in any tab — it'll be saved here automatically." : "Try a different filter or run a new analysis."}
+          </p>
+        </Card>
+      )}
+
+      {/* Campaign list */}
+      {filtered.map((c, i) => (
+        <Card key={c.id} d={0.03 + i * 0.02} style={{ marginBottom: 8, cursor: "pointer" }}
+          onClick={() => onView && onView(c)}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 16 }}>{typeIcons[c.type] || "📄"}</span>
+                <Badge c={typeColors2[c.type] || T.bl2} g={(typeColors2[c.type] || T.bl2) + "15"}>{typeLabels[c.type] || c.type}</Badge>
+                <span style={{ fontSize: 10, color: T.td }}>{c.date}</span>
+              </div>
+              <div style={{ fontSize: 13, color: T.t, fontWeight: 600, marginBottom: 4 }}>
+                {c.data?.videoTitle || c.data?.overallStrategy?.slice(0, 80) || c.data?.topics?.[0]?.topic || c.data?.patterns?.[0]?.pattern || "Campaign"}
+              </div>
+              {c.type === "shorts" && c.data?.clips && (
+                <div style={{ fontSize: 10, color: T.tm }}>{c.data.clips.length} clips found · Best: {c.data.clips[0]?.viralScore || "—"} viral score</div>
+              )}
+              {c.type === "audit" && c.data?.scores && (
+                <div style={{ fontSize: 10, color: T.tm }}>Overall score: {c.data.scores.overall}/100 · CTR: {c.data.scores.ctr} · Hook: {c.data.scores.hook}</div>
+              )}
+              {c.type === "demand" && c.data?.topics && (
+                <div style={{ fontSize: 10, color: T.tm }}>{c.data.topics.length} topics found · Top gap: {c.data.topics[0]?.gapScore || "—"}</div>
+              )}
+              {c.type === "viral" && c.data?.patterns && (
+                <div style={{ fontSize: 10, color: T.tm }}>{c.data.patterns.length} patterns · Top: {c.data.patterns[0]?.heatScore || "—"} heat</div>
+              )}
+              {c.type === "compete" && c.data?.competitors && (
+                <div style={{ fontSize: 10, color: T.tm }}>{c.data.competitors.length} competitors analyzed</div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: T.gr }}>View →</span>
+              <button onClick={(e) => { e.stopPropagation(); setConfirm(c.id); }} style={{
+                padding: "3px 6px", borderRadius: 4, border: `1px solid ${T.b}`,
+                background: "transparent", color: T.td, fontSize: 10, cursor: "pointer"
+              }}>🗑️</button>
+            </div>
+          </div>
+          {confirm === c.id && (
+            <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }} onClick={e => e.stopPropagation()}>
+              <span style={{ fontSize: 11, color: T.red }}>Delete this campaign?</span>
+              <button onClick={() => handleDelete(c.id)} style={{ padding: "4px 10px", borderRadius: 5, border: "none", background: T.red, color: "#FFF", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+              <button onClick={() => setConfirm(null)} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${T.b}`, background: "transparent", color: T.tm, fontSize: 10, cursor: "pointer" }}>Cancel</button>
+            </div>
+          )}
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════
+// CAMPAIGN DETAIL VIEW
+// ═══════════════════════════════════
+function CampaignDetail({ campaign, onBack }) {
+  if (!campaign) return null;
+  const c = campaign;
+  return (
+    <div style={{ maxWidth: 920, margin: "0 auto", padding: "20px 14px 80px" }}>
+      <button onClick={onBack} style={{
+        padding: "6px 14px", borderRadius: 6, border: `1px solid ${T.b}`,
+        background: T.s2, color: T.tm, fontSize: 12, cursor: "pointer", marginBottom: 14,
+        display: "flex", alignItems: "center", gap: 6
+      }}>← Back to Campaigns</button>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 22 }}>{typeIcons[c.type] || "📄"}</span>
+        <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 18, fontWeight: 800 }}>{typeLabels[c.type] || c.type}</h2>
+        <Badge c={typeColors2[c.type] || T.bl2}>{c.date}</Badge>
+      </div>
+
+      {c.type === "shorts" && c.data && renderShortsResult(c.data)}
+      {c.type === "audit" && c.data && renderAudit(c.data)}
+      {c.type === "demand" && c.data && renderDemand(c.data)}
+      {c.type === "viral" && c.data && renderViral(c.data)}
+      {c.type === "compete" && c.data && renderCompetitors(c.data)}
+    </div>
+  );
+}
+
+// ── Shorts result renderer (extracted for reuse) ──
+function renderShortsResult(result) {
+  return (
+    <>
+      {result.overallStrategy && (
+        <Card d={0.05} style={{ marginBottom: 8, background: `linear-gradient(135deg,${T.pkg},${T.s})`, borderColor: T.pk + "33" }}>
+          <Badge c={T.pk}>✂️ STRATEGY</Badge>
+          <p style={{ marginTop: 6, fontSize: 12, color: T.t, lineHeight: 1.5 }}>{result.overallStrategy}</p>
+        </Card>
+      )}
+      {result.clips && result.clips.map((clip, i) => (
+        <Card key={i} d={0.07 + i * 0.03} style={{ marginBottom: 8 }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ minWidth: 56 }}><Ring score={clip.viralScore} size={56} stroke={4} color={T.pk} label="Viral" /></div>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 6, flexWrap: "wrap" }}>
+                <Mono style={{ fontSize: 11, fontWeight: 600, color: T.cy, background: T.cg, padding: "2px 7px", borderRadius: 4 }}>{clip.startTime} → {clip.endTime}</Mono>
+                <Badge c={typeColors[clip.clipType] || T.pu} g={(typeColors[clip.clipType] || T.pu) + "12"}>{clip.clipType}</Badge>
+                <Mono style={{ fontSize: 10, color: T.td }}>{clip.duration}</Mono>
+                <Badge c={T.bl2} g={T.bg2}>{clip.postDay}</Badge>
+              </div>
+              <div style={{ padding: "8px 10px", borderRadius: 6, background: T.rg, border: `1px solid ${T.red}15`, marginBottom: 8 }}>
+                <div style={{ fontSize: 8, fontWeight: 700, color: T.red, textTransform: "uppercase", marginBottom: 3 }}>🎣 Hook</div>
+                <div style={{ fontSize: 13, color: T.t, fontWeight: 600 }}>"{clip.hookLine}"</div>
+              </div>
+              {clip.textOverlay && <div style={{ padding: "6px 10px", borderRadius: 6, background: T.s3, border: `1px solid ${T.bl}`, marginBottom: 8 }}><div style={{ fontSize: 8, fontWeight: 700, color: T.yl, textTransform: "uppercase", marginBottom: 2 }}>📝 Text Overlay</div><div style={{ fontSize: 14, color: T.t, fontWeight: 700, fontFamily: "'Sora',sans-serif" }}>{clip.textOverlay}</div></div>}
+              <p style={{ fontSize: 11, color: T.tm, lineHeight: 1.45, marginBottom: 8 }}>{clip.whyViral}</p>
+              <div style={{ padding: "8px 10px", borderRadius: 6, background: T.s2, border: `1px solid ${T.b}`, marginBottom: 6 }}>
+                <div style={{ fontSize: 8, fontWeight: 700, color: T.gr, textTransform: "uppercase", marginBottom: 3 }}>📋 Caption</div>
+                <div style={{ fontSize: 11, color: T.t, marginBottom: 4 }}>{clip.caption}</div>
+                <div style={{ fontSize: 10, color: T.bl2 }}>{clip.hashtags}</div>
+              </div>
+              <div style={{ fontSize: 10, color: T.td }}>Est: <b style={{ color: T.yl }}>{clip.estimatedViews}</b></div>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </>
+  );
+}
+
+// ═══════════════════════════════════
+// MY PLAN — 7-DAY GOAL TRACKER
+// ═══════════════════════════════════
+function MyPlan() {
+  const STORAGE_KEY = "zupi_plan_checks";
+  const [checks, setChecks] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; }
+  });
+
+  function toggle(id) {
+    const next = { ...checks, [id]: !checks[id] };
+    setChecks(next);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  }
+
+  const totalTasks = 24;
+  const doneCount = Object.values(checks).filter(Boolean).length;
+  const pct = Math.round((doneCount / totalTasks) * 100);
+
+  function Task({ id, time, text, tag }) {
+    const done = checks[id];
+    const tagCol = { clip: T.pk, post: T.bl2, engage: T.gr, analyze: T.or, plan: T.pu };
+    return (
+      <div onClick={() => toggle(id)} style={{
+        display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px",
+        borderRadius: 6, background: done ? T.gg : T.s2, border: `1px solid ${done ? T.gr + "22" : T.b}`,
+        cursor: "pointer", opacity: done ? 0.6 : 1, transition: "all 0.2s"
+      }}>
+        <div style={{
+          minWidth: 18, height: 18, borderRadius: 4, marginTop: 1,
+          border: `2px solid ${done ? T.gr : T.bl}`, background: done ? T.gr : "transparent",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 10, color: "#000", fontWeight: 800
+        }}>{done ? "✓" : ""}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 12, color: T.t, lineHeight: 1.4, textDecoration: done ? "line-through" : "none" }}>{text}</div>
+          <div style={{ display: "flex", gap: 6, marginTop: 3, alignItems: "center" }}>
+            {time && <Mono style={{ fontSize: 10, color: T.cy }}>{time}</Mono>}
+            {tag && <Badge c={tagCol[tag] || T.td} g={(tagCol[tag] || T.td) + "15"}>{tag}</Badge>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const days = [
+    { day: "Day 1", label: "TODAY", color: T.red, tasks: [
+      { id: "d1t1", time: "2:00 PM", text: "Cut Clip 1 (0:17–0:41): 'Wallet empty, phone on 1%' → CapCut → 9:16 vertical → add 'PHONE ON 1% 💀' text overlay", tag: "clip" },
+      { id: "d1t2", time: "2:00 PM", text: "Upload Clip 1 as YouTube Short. Caption: 'When life hits different in Japan 😭🔥 #shorts #japanhiphop #hashire'", tag: "post" },
+      { id: "d1t3", time: "6:00 PM", text: "Cut Clip 2 (0:26–0:41): 'She said who that girl? Just my wifi' → add 'JUST MY WIFI 😂' text", tag: "clip" },
+      { id: "d1t4", time: "6:00 PM", text: "Upload Clip 2 as YouTube Short. Caption: 'She wasn't ready for this answer 💀😂 #shorts #funny #bars'", tag: "post" },
+      { id: "d1t5", text: "Post both Shorts to TikTok and Instagram Reels too", tag: "post" },
+      { id: "d1t6", text: "Reply to EVERY comment within 2 hours", tag: "engage" },
+    ]},
+    { day: "Day 2", color: T.or, tasks: [
+      { id: "d2t1", time: "2:00 PM", text: "Cut Clip 3 (0:34–0:48): 'Credit card crying, life too fast, ghosting' → add 'CREDIT CARD CRYING 💳😭' text", tag: "clip" },
+      { id: "d2t2", time: "2:00 PM", text: "Upload Clip 3 as YouTube Short. Caption: 'This bar hit too close to home 😭💳 #shorts #hiphop #realrap'", tag: "post" },
+      { id: "d2t3", time: "6:00 PM", text: "Cut Clip 4 (0:41–0:58): 'If I smell like trouble, I'm already kinetic' → add 'ALREADY KINETIC ⚡' text", tag: "clip" },
+      { id: "d2t4", time: "6:00 PM", text: "Upload Clip 4 as YouTube Short. Caption: 'This line is INSANE 🔥⚡ #shorts #bars #fire #hiphop'", tag: "post" },
+      { id: "d2t5", text: "Share clips to r/hiphopheads, r/japanlife, hip-hop Discord servers", tag: "post" },
+      { id: "d2t6", text: "Reply to all comments. Pin the best one on each Short", tag: "engage" },
+    ]},
+    { day: "Day 3", color: T.yl, tasks: [
+      { id: "d3t1", time: "2:00 PM", text: "Cut Clip 5 (0:00–0:17): Opening 'HASHIRE' hook + Okinawa visuals → add 'HASHIRE 🇯🇵🔥' text", tag: "clip" },
+      { id: "d3t2", time: "2:00 PM", text: "Upload Clip 5. Caption: 'Filmed this in OKINAWA 🇯🇵🔥 Full vid on my channel #shorts #okinawa #japan'", tag: "post" },
+      { id: "d3t3", time: "6:00 PM", text: "Cut Clip 6 (0:58–1:16): Second verse chorus reprise → add 'WALLET EMPTY 💀' text", tag: "clip" },
+      { id: "d3t4", time: "6:00 PM", text: "Upload Clip 6. Caption: 'POV: Japan life hits different when you're broke 💀🇯🇵 #shorts #struggle #japan'", tag: "post" },
+      { id: "d3t5", text: "Cross-post ALL 6 Shorts to TikTok and Instagram Reels", tag: "post" },
+    ]},
+    { day: "Day 4-5", label: "REPOST + ENGAGE", color: T.bl2, tasks: [
+      { id: "d4t1", text: "Check YouTube Studio: which Short got the most views? Note it down", tag: "analyze" },
+      { id: "d4t2", text: "Repost your best-performing Short to TikTok with a different caption angle", tag: "post" },
+      { id: "d4t3", text: "Post community poll: 'Which bar hit hardest? 💀' with clip screenshots", tag: "engage" },
+      { id: "d4t4", text: "Reply to every comment on every Short and the full video", tag: "engage" },
+    ]},
+    { day: "Day 6-7", label: "ANALYZE + PLAN NEXT", color: T.pu, tasks: [
+      { id: "d6t1", text: "Check YouTube Studio: total views across all Shorts + full video", tag: "analyze" },
+      { id: "d6t2", text: "Identify which clip format performed best (punchline? visuals? relatable bars?)", tag: "analyze" },
+      { id: "d6t3", text: "Start planning your NEXT video — use what worked from this week", tag: "plan" },
+    ]},
+  ];
+
+  return (
+    <div style={{ maxWidth: 920, margin: "0 auto", padding: "20px 14px 80px" }}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <span style={{ fontSize: 20 }}>📋</span>
+          <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 19, fontWeight: 800 }}>My 7-Day Plan</h2>
+          <Badge c={T.or} g={T.og}>HASHIRE</Badge>
+        </div>
+        <p style={{ fontSize: 12, color: T.tm }}>Your growth plan for "HASHIRE – B-Spanner". Check off tasks as you complete them.</p>
+      </div>
+
+      {/* Progress bar */}
+      <Card d={0.05} style={{ marginBottom: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: T.t }}>{doneCount}/{totalTasks} tasks completed</span>
+          <Mono style={{ fontSize: 13, fontWeight: 600, color: pct >= 80 ? T.gr : pct >= 40 ? T.yl : T.red }}>{pct}%</Mono>
+        </div>
+        <div style={{ height: 6, borderRadius: 3, background: T.b }}>
+          <div style={{ width: `${pct}%`, height: "100%", borderRadius: 3, background: pct >= 80 ? T.gr : pct >= 40 ? T.yl : T.red, transition: "width 0.3s" }} />
+        </div>
+      </Card>
+
+      {/* Day cards */}
+      {days.map((d, di) => (
+        <Card key={di} d={0.08 + di * 0.03} style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={{ padding: "4px 12px", borderRadius: 6, background: d.color + "15", border: `1px solid ${d.color}22` }}>
+              <span style={{ fontFamily: "'Sora',sans-serif", fontSize: 12, fontWeight: 800, color: d.color }}>{d.day}</span>
+            </div>
+            {d.label && <Badge c={d.color} g={d.color + "15"}>{d.label}</Badge>}
+            <Mono style={{ fontSize: 10, color: T.td, marginLeft: "auto" }}>
+              {d.tasks.filter(t => checks[t.id]).length}/{d.tasks.length} done
+            </Mono>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {d.tasks.map(t => <Task key={t.id} {...t} />)}
+          </div>
+        </Card>
+      ))}
+
+      {/* Reset button */}
+      <div style={{ textAlign: "center", marginTop: 12 }}>
+        <button onClick={() => { setChecks({}); localStorage.removeItem(STORAGE_KEY); }} style={{
+          padding: "6px 14px", borderRadius: 6, border: `1px solid ${T.b}`,
+          background: "transparent", color: T.td, fontSize: 11, cursor: "pointer"
+        }}>Reset all checkmarks</button>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════
 export default function App() {
-  const [page, setPage] = useState("shorts");
+  const [page, setPage] = useState("plan");
   const [thumbPreset, setThumbPreset] = useState(null);
+  const [viewingCampaign, setViewingCampaign] = useState(null);
 
   function goToThumb(textOverlay, concept) {
     setThumbPreset({ text: textOverlay || "", concept: concept || "" });
     setPage("thumb");
   }
+
+  function handleSaveCampaign(type, data) {
+    saveCampaign(type, data);
+  }
+
+  function handleViewCampaign(campaign) {
+    setViewingCampaign(campaign);
+    setPage("campaign-detail");
+  }
+
   const nav = [
+    { k: "plan", l: "My Plan", i: "📋" },
     { k: "shorts", l: "Shorts", i: "✂️" },
     { k: "thumb", l: "Thumbnails", i: "🖼️" },
     { k: "audit", l: "Audit", i: "🔍" },
     { k: "demand", l: "Demand", i: "📡" },
     { k: "viral", l: "Patterns", i: "🧬" },
     { k: "gaps", l: "Compete", i: "🎯" },
+    { k: "campaigns", l: "Campaigns", i: "📂" },
   ];
 
   return (
@@ -1060,11 +1437,13 @@ export default function App() {
         </div>
       </nav>
 
-      {page === "shorts" && <ShortsClipper onCreateThumb={goToThumb} />}
+      {page === "plan" && <MyPlan />}
+
+      {page === "shorts" && <ShortsClipper onCreateThumb={goToThumb} onSave={(data) => handleSaveCampaign("shorts", data)} />}
 
       {page === "thumb" && <ThumbnailMaker preset={thumbPreset} onPresetUsed={() => setThumbPreset(null)} />}
 
-      {page === "audit" && <VideoAuditPage />}
+      {page === "audit" && <VideoAuditPage onSave={(data) => handleSaveCampaign("audit", data)} />}
 
       {page === "demand" && (
         <AIPage title="AI Demand Scanner" icon="📡" desc="High-demand topics with zero competition."
@@ -1072,7 +1451,8 @@ export default function App() {
           quickPicks={["AI & Tech", "Gaming", "Fitness", "Finance", "Cooking", "Music"]}
           prompt={q => `Find TOP 4 topics for "${q}" with highest organic viral potential. Return JSON: {"topics":[{"topic":"title","gapScore":0-100,"searchVolume":"X/mo","trend":"↑X%","difficulty":"Easy/Medium/Hard","format":"type","timing":"NOW/This week/Evergreen","estimatedViews":"range","whyItWorks":"why","titleSuggestion":"title"}]} Sort by gapScore.`}
           sys="YouTube trend analyst. Valid JSON only."
-          renderResult={renderDemand} />
+          renderResult={renderDemand}
+          onSave={(data) => handleSaveCampaign("demand", data)} />
       )}
 
       {page === "viral" && (
@@ -1081,7 +1461,8 @@ export default function App() {
           quickPicks={["AI & Tech", "Gaming", "Fitness", "Finance"]}
           prompt={q => `Find TOP 3 viral patterns in "${q}" driving 100K+ organic views. Return JSON: {"patterns":[{"pattern":"name","heatScore":0-100,"rising":true/false,"avgViews":"range","whyItWorks":"why","gapOpportunity":"gap","actionToday":"action","titleTemplate":"template"}]}`}
           sys="YouTube content strategist. Valid JSON only."
-          renderResult={renderViral} />
+          renderResult={renderViral}
+          onSave={(data) => handleSaveCampaign("viral", data)} />
       )}
 
       {page === "gaps" && (
@@ -1089,8 +1470,13 @@ export default function App() {
           placeholder="Competitor or niche..." btnText="Analyze" fallback={demoCompetitors}
           prompt={q => `Analyze "${q}". 2 competitors, weaknesses, steal strategies. Return JSON: {"overallStrategy":"plan","quickWins":["w1","w2","w3"],"competitors":[{"name":"ch","estimatedSubs":"X","estimatedAvgViews":"X","strengths":["s1","s2","s3"],"weaknesses":["w1","w2","w3"],"audienceStealStrategy":"strategy","vulnerabilityScore":0-100}]}`}
           sys="YouTube competitive analyst. Valid JSON only."
-          renderResult={renderCompetitors} />
+          renderResult={renderCompetitors}
+          onSave={(data) => handleSaveCampaign("compete", data)} />
       )}
+
+      {page === "campaigns" && <CampaignsPage onView={handleViewCampaign} />}
+
+      {page === "campaign-detail" && <CampaignDetail campaign={viewingCampaign} onBack={() => setPage("campaigns")} />}
 
       <div style={{ textAlign: "center", padding: "14px", borderTop: `1px solid ${T.b}`, fontSize: 9, color: T.td }}>
         <span style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, color: T.tm }}>Zupi Growth</span> — AI-powered YouTube growth. 100% organic. $0 spent.
