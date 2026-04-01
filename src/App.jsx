@@ -158,7 +158,7 @@ const typeColors = { Reaction: T.or, Tutorial: T.bl2, HotTake: T.red, Surprise: 
 // ═══════════════════════════════════
 // SHORTS CLIPPER
 // ═══════════════════════════════════
-function ShortsClipper({ onCreateThumb, onSave }) {
+function ShortsClipper({ onCreateThumb }) {
   const [url, setUrl] = useState("");
   const [transcript, setTranscript] = useState("");
   const [mode, setMode] = useState("url");
@@ -194,7 +194,7 @@ Return JSON: {"videoTitle":"title based on transcript content","clips":[{"clipNu
         ? "You are the world's #1 YouTube Shorts strategist. You are analyzing a REAL transcript. Use ACTUAL quotes and moments from the transcript. Be extremely specific. Valid JSON only."
         : "World's #1 Shorts strategist. Valid JSON only."
     );
-    if (data) { setResult(data); if (onSave) onSave(data); } else { setResult(demoShorts(url || "your video")); setDemo(true); if (onSave) onSave(demoShorts(url || "your video")); }
+    if (data) { setResult(data); } else { setResult(demoShorts(url || "your video")); setDemo(true); }
     setLd(false);
   }
 
@@ -399,7 +399,7 @@ Return JSON: {"videoTitle":"title based on transcript content","clips":[{"clipNu
 // ═══════════════════════════════════
 // GENERIC AI PAGE
 // ═══════════════════════════════════
-function AIPage({ title, icon, desc, placeholder, prompt, sys, btnText, quickPicks, fallback, renderResult, onSave }) {
+function AIPage({ title, icon, desc, placeholder, prompt, sys, btnText, quickPicks, fallback, renderResult }) {
   const [q, setQ] = useState("");
   const [ld, setLd] = useState(false);
   const [r, setR] = useState(null);
@@ -409,7 +409,7 @@ function AIPage({ title, icon, desc, placeholder, prompt, sys, btnText, quickPic
     if (!q.trim()) return;
     setLd(true); setR(null); setDemo(false);
     const { data, error } = await askClaude(prompt(q), sys);
-    if (data) { setR(data); if (onSave) onSave(data); } else { const fb = fallback ? fallback(q) : null; setR(fb); setDemo(true); if (onSave && fb) onSave(fb); }
+    if (data) { setR(data); } else { setR(fallback ? fallback(q) : null); setDemo(true); }
     setLd(false);
   }
 
@@ -928,7 +928,7 @@ function ThumbnailMaker({ preset, onPresetUsed }) {
 // ═══════════════════════════════════
 // VIDEO AUDIT WITH TRANSCRIPT
 // ═══════════════════════════════════
-function VideoAuditPage({ onSave }) {
+function VideoAuditPage() {
   const [url, setUrl] = useState("");
   const [transcript, setTranscript] = useState("");
   const [mode, setMode] = useState("url");
@@ -952,7 +952,7 @@ Return JSON: {"videoTitle":"actual title from content","scores":{"overall":0-100
       : `Analyze "${url}" for organic growth. Return JSON: {"videoTitle":"title","scores":{"overall":0-100,"ctr":0-100,"hook":0-100,"pacing":0-100,"cta":0-100,"seo":0-100},"titleRewrites":["t1","t2","t3"],"hookFix":"fix","thumbnailIdeas":["i1","i2","i3"],"retentionRisks":[{"time":"X:XX","issue":"desc"}],"endScreenStrategy":"rec","ctaFix":"fix","topPriority":"#1 change","freeDistribution":"3 places"}`;
 
     const { data } = await askClaude(prompt, hasT ? "Aggressive YouTube strategist analyzing REAL transcript. Be extremely specific. Valid JSON only." : "Aggressive YouTube organic strategist. Valid JSON only.");
-    if (data) { setR(data); if (onSave) onSave(data); } else { setR(demoAudit(url || "your video")); setDemo(true); if (onSave) onSave(demoAudit(url || "your video")); }
+    if (data) { setR(data); } else { setR(demoAudit(url || "your video")); setDemo(true); }
     setLd(false);
   }
 
@@ -1006,258 +1006,16 @@ Return JSON: {"videoTitle":"actual title from content","scores":{"overall":0-100
 }
 
 // ═══════════════════════════════════
-// CAMPAIGN STORAGE
-// ═══════════════════════════════════
-function saveCampaign(type, data) {
-  try {
-    const campaigns = JSON.parse(localStorage.getItem("zupi_campaigns") || "[]");
-    const campaign = {
-      id: Date.now().toString(),
-      type,
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }),
-      timestamp: Date.now(),
-      data
-    };
-    campaigns.unshift(campaign);
-    if (campaigns.length > 50) campaigns.length = 50;
-    localStorage.setItem("zupi_campaigns", JSON.stringify(campaigns));
-    return campaign.id;
-  } catch (e) { console.error("Save error:", e); return null; }
-}
-
-function getCampaigns() {
-  try { return JSON.parse(localStorage.getItem("zupi_campaigns") || "[]"); }
-  catch { return []; }
-}
-
-function deleteCampaign(id) {
-  try {
-    const campaigns = getCampaigns().filter(c => c.id !== id);
-    localStorage.setItem("zupi_campaigns", JSON.stringify(campaigns));
-  } catch (e) { console.error(e); }
-}
-
-const typeIcons = { shorts: "✂️", audit: "🔍", demand: "📡", viral: "🧬", compete: "🎯" };
-const typeLabels = { shorts: "Shorts Clipper", audit: "Video Audit", demand: "Demand Scan", viral: "Viral Patterns", compete: "Competitor Analysis" };
-const typeColors2 = { shorts: T.pk, audit: T.bl2, demand: T.cy, viral: T.pu, compete: T.red };
-
-// ═══════════════════════════════════
-// CAMPAIGNS PAGE
-// ═══════════════════════════════════
-function CampaignsPage({ onView }) {
-  const [campaigns, setCampaigns] = useState(getCampaigns());
-  const [filter, setFilter] = useState("all");
-  const [confirm, setConfirm] = useState(null);
-
-  function handleDelete(id) {
-    deleteCampaign(id);
-    setCampaigns(getCampaigns());
-    setConfirm(null);
-  }
-
-  function handleClearAll() {
-    localStorage.removeItem("zupi_campaigns");
-    setCampaigns([]);
-    setConfirm(null);
-  }
-
-  const filtered = filter === "all" ? campaigns : campaigns.filter(c => c.type === filter);
-
-  return (
-    <div style={{ maxWidth: 920, margin: "0 auto", padding: "20px 14px 80px" }}>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <span style={{ fontSize: 20 }}>📂</span>
-          <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 19, fontWeight: 800 }}>My Campaigns</h2>
-          <Badge c={T.gr} g={T.gg}>{campaigns.length} SAVED</Badge>
-        </div>
-        <p style={{ fontSize: 12, color: T.tm }}>All your past analyses saved automatically. Click any campaign to view the full results.</p>
-      </div>
-
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        {[["all", "All"], ["shorts", "✂️ Shorts"], ["audit", "🔍 Audits"], ["demand", "📡 Demand"], ["viral", "🧬 Patterns"], ["compete", "🎯 Compete"]].map(([k, l]) => (
-          <button key={k} onClick={() => setFilter(k)} style={{
-            padding: "5px 12px", borderRadius: 6, border: `1px solid ${filter === k ? T.red + "44" : T.b}`,
-            background: filter === k ? T.rg : "transparent", color: filter === k ? T.red : T.tm,
-            fontSize: 11, fontWeight: 500, cursor: "pointer"
-          }}>{l}</button>
-        ))}
-        {campaigns.length > 0 && (
-          <button onClick={() => setConfirm("all")} style={{
-            marginLeft: "auto", padding: "5px 12px", borderRadius: 6, border: `1px solid ${T.b}`,
-            background: "transparent", color: T.td, fontSize: 10, cursor: "pointer"
-          }}>🗑️ Clear all</button>
-        )}
-      </div>
-
-      {/* Confirm clear all */}
-      {confirm === "all" && (
-        <Card style={{ background: T.rg, borderColor: T.red + "33", marginBottom: 12 }}>
-          <p style={{ fontSize: 12, color: T.t, marginBottom: 8 }}>Delete all campaigns? This can't be undone.</p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={handleClearAll} style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: T.red, color: "#FFF", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Yes, delete all</button>
-            <button onClick={() => setConfirm(null)} style={{ padding: "6px 14px", borderRadius: 6, border: `1px solid ${T.b}`, background: "transparent", color: T.tm, fontSize: 11, cursor: "pointer" }}>Cancel</button>
-          </div>
-        </Card>
-      )}
-
-      {/* Empty state */}
-      {filtered.length === 0 && (
-        <Card style={{ textAlign: "center", padding: "40px 20px" }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
-          <h3 style={{ fontFamily: "'Sora',sans-serif", fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
-            {campaigns.length === 0 ? "No campaigns yet" : "No " + (typeLabels[filter] || "") + " campaigns"}
-          </h3>
-          <p style={{ fontSize: 12, color: T.tm }}>
-            {campaigns.length === 0 ? "Run your first analysis in any tab — it'll be saved here automatically." : "Try a different filter or run a new analysis."}
-          </p>
-        </Card>
-      )}
-
-      {/* Campaign list */}
-      {filtered.map((c, i) => (
-        <Card key={c.id} d={0.03 + i * 0.02} style={{ marginBottom: 8, cursor: "pointer" }}
-          onClick={() => onView && onView(c)}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 16 }}>{typeIcons[c.type] || "📄"}</span>
-                <Badge c={typeColors2[c.type] || T.bl2} g={(typeColors2[c.type] || T.bl2) + "15"}>{typeLabels[c.type] || c.type}</Badge>
-                <span style={{ fontSize: 10, color: T.td }}>{c.date}</span>
-              </div>
-              <div style={{ fontSize: 13, color: T.t, fontWeight: 600, marginBottom: 4 }}>
-                {c.data?.videoTitle || c.data?.overallStrategy?.slice(0, 80) || c.data?.topics?.[0]?.topic || c.data?.patterns?.[0]?.pattern || "Campaign"}
-              </div>
-              {c.type === "shorts" && c.data?.clips && (
-                <div style={{ fontSize: 10, color: T.tm }}>{c.data.clips.length} clips found · Best: {c.data.clips[0]?.viralScore || "—"} viral score</div>
-              )}
-              {c.type === "audit" && c.data?.scores && (
-                <div style={{ fontSize: 10, color: T.tm }}>Overall score: {c.data.scores.overall}/100 · CTR: {c.data.scores.ctr} · Hook: {c.data.scores.hook}</div>
-              )}
-              {c.type === "demand" && c.data?.topics && (
-                <div style={{ fontSize: 10, color: T.tm }}>{c.data.topics.length} topics found · Top gap: {c.data.topics[0]?.gapScore || "—"}</div>
-              )}
-              {c.type === "viral" && c.data?.patterns && (
-                <div style={{ fontSize: 10, color: T.tm }}>{c.data.patterns.length} patterns · Top: {c.data.patterns[0]?.heatScore || "—"} heat</div>
-              )}
-              {c.type === "compete" && c.data?.competitors && (
-                <div style={{ fontSize: 10, color: T.tm }}>{c.data.competitors.length} competitors analyzed</div>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: T.gr }}>View →</span>
-              <button onClick={(e) => { e.stopPropagation(); setConfirm(c.id); }} style={{
-                padding: "3px 6px", borderRadius: 4, border: `1px solid ${T.b}`,
-                background: "transparent", color: T.td, fontSize: 10, cursor: "pointer"
-              }}>🗑️</button>
-            </div>
-          </div>
-          {confirm === c.id && (
-            <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }} onClick={e => e.stopPropagation()}>
-              <span style={{ fontSize: 11, color: T.red }}>Delete this campaign?</span>
-              <button onClick={() => handleDelete(c.id)} style={{ padding: "4px 10px", borderRadius: 5, border: "none", background: T.red, color: "#FFF", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>Delete</button>
-              <button onClick={() => setConfirm(null)} style={{ padding: "4px 10px", borderRadius: 5, border: `1px solid ${T.b}`, background: "transparent", color: T.tm, fontSize: 10, cursor: "pointer" }}>Cancel</button>
-            </div>
-          )}
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════
-// CAMPAIGN DETAIL VIEW
-// ═══════════════════════════════════
-function CampaignDetail({ campaign, onBack }) {
-  if (!campaign) return null;
-  const c = campaign;
-  return (
-    <div style={{ maxWidth: 920, margin: "0 auto", padding: "20px 14px 80px" }}>
-      <button onClick={onBack} style={{
-        padding: "6px 14px", borderRadius: 6, border: `1px solid ${T.b}`,
-        background: T.s2, color: T.tm, fontSize: 12, cursor: "pointer", marginBottom: 14,
-        display: "flex", alignItems: "center", gap: 6
-      }}>← Back to Campaigns</button>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 22 }}>{typeIcons[c.type] || "📄"}</span>
-        <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: 18, fontWeight: 800 }}>{typeLabels[c.type] || c.type}</h2>
-        <Badge c={typeColors2[c.type] || T.bl2}>{c.date}</Badge>
-      </div>
-
-      {c.type === "shorts" && c.data && renderShortsResult(c.data)}
-      {c.type === "audit" && c.data && renderAudit(c.data)}
-      {c.type === "demand" && c.data && renderDemand(c.data)}
-      {c.type === "viral" && c.data && renderViral(c.data)}
-      {c.type === "compete" && c.data && renderCompetitors(c.data)}
-    </div>
-  );
-}
-
-// ── Shorts result renderer (extracted for reuse) ──
-function renderShortsResult(result) {
-  return (
-    <>
-      {result.overallStrategy && (
-        <Card d={0.05} style={{ marginBottom: 8, background: `linear-gradient(135deg,${T.pkg},${T.s})`, borderColor: T.pk + "33" }}>
-          <Badge c={T.pk}>✂️ STRATEGY</Badge>
-          <p style={{ marginTop: 6, fontSize: 12, color: T.t, lineHeight: 1.5 }}>{result.overallStrategy}</p>
-        </Card>
-      )}
-      {result.clips && result.clips.map((clip, i) => (
-        <Card key={i} d={0.07 + i * 0.03} style={{ marginBottom: 8 }}>
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
-            <div style={{ minWidth: 56 }}><Ring score={clip.viralScore} size={56} stroke={4} color={T.pk} label="Viral" /></div>
-            <div style={{ flex: 1, minWidth: 220 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 6, flexWrap: "wrap" }}>
-                <Mono style={{ fontSize: 11, fontWeight: 600, color: T.cy, background: T.cg, padding: "2px 7px", borderRadius: 4 }}>{clip.startTime} → {clip.endTime}</Mono>
-                <Badge c={typeColors[clip.clipType] || T.pu} g={(typeColors[clip.clipType] || T.pu) + "12"}>{clip.clipType}</Badge>
-                <Mono style={{ fontSize: 10, color: T.td }}>{clip.duration}</Mono>
-                <Badge c={T.bl2} g={T.bg2}>{clip.postDay}</Badge>
-              </div>
-              <div style={{ padding: "8px 10px", borderRadius: 6, background: T.rg, border: `1px solid ${T.red}15`, marginBottom: 8 }}>
-                <div style={{ fontSize: 8, fontWeight: 700, color: T.red, textTransform: "uppercase", marginBottom: 3 }}>🎣 Hook</div>
-                <div style={{ fontSize: 13, color: T.t, fontWeight: 600 }}>"{clip.hookLine}"</div>
-              </div>
-              {clip.textOverlay && <div style={{ padding: "6px 10px", borderRadius: 6, background: T.s3, border: `1px solid ${T.bl}`, marginBottom: 8 }}><div style={{ fontSize: 8, fontWeight: 700, color: T.yl, textTransform: "uppercase", marginBottom: 2 }}>📝 Text Overlay</div><div style={{ fontSize: 14, color: T.t, fontWeight: 700, fontFamily: "'Sora',sans-serif" }}>{clip.textOverlay}</div></div>}
-              <p style={{ fontSize: 11, color: T.tm, lineHeight: 1.45, marginBottom: 8 }}>{clip.whyViral}</p>
-              <div style={{ padding: "8px 10px", borderRadius: 6, background: T.s2, border: `1px solid ${T.b}`, marginBottom: 6 }}>
-                <div style={{ fontSize: 8, fontWeight: 700, color: T.gr, textTransform: "uppercase", marginBottom: 3 }}>📋 Caption</div>
-                <div style={{ fontSize: 11, color: T.t, marginBottom: 4 }}>{clip.caption}</div>
-                <div style={{ fontSize: 10, color: T.bl2 }}>{clip.hashtags}</div>
-              </div>
-              <div style={{ fontSize: 10, color: T.td }}>Est: <b style={{ color: T.yl }}>{clip.estimatedViews}</b></div>
-            </div>
-          </div>
-        </Card>
-      ))}
-    </>
-  );
-}
-
-// ═══════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════
 export default function App() {
   const [page, setPage] = useState("shorts");
   const [thumbPreset, setThumbPreset] = useState(null);
-  const [viewingCampaign, setViewingCampaign] = useState(null);
 
   function goToThumb(textOverlay, concept) {
     setThumbPreset({ text: textOverlay || "", concept: concept || "" });
     setPage("thumb");
   }
-
-  function handleSaveCampaign(type, data) {
-    saveCampaign(type, data);
-  }
-
-  function handleViewCampaign(campaign) {
-    setViewingCampaign(campaign);
-    setPage("campaign-detail");
-  }
-
   const nav = [
     { k: "shorts", l: "Shorts", i: "✂️" },
     { k: "thumb", l: "Thumbnails", i: "🖼️" },
@@ -1265,7 +1023,6 @@ export default function App() {
     { k: "demand", l: "Demand", i: "📡" },
     { k: "viral", l: "Patterns", i: "🧬" },
     { k: "gaps", l: "Compete", i: "🎯" },
-    { k: "campaigns", l: "My Campaigns", i: "📂" },
   ];
 
   return (
@@ -1303,11 +1060,11 @@ export default function App() {
         </div>
       </nav>
 
-      {page === "shorts" && <ShortsClipper onCreateThumb={goToThumb} onSave={(data) => handleSaveCampaign("shorts", data)} />}
+      {page === "shorts" && <ShortsClipper onCreateThumb={goToThumb} />}
 
       {page === "thumb" && <ThumbnailMaker preset={thumbPreset} onPresetUsed={() => setThumbPreset(null)} />}
 
-      {page === "audit" && <VideoAuditPage onSave={(data) => handleSaveCampaign("audit", data)} />}
+      {page === "audit" && <VideoAuditPage />}
 
       {page === "demand" && (
         <AIPage title="AI Demand Scanner" icon="📡" desc="High-demand topics with zero competition."
@@ -1315,8 +1072,7 @@ export default function App() {
           quickPicks={["AI & Tech", "Gaming", "Fitness", "Finance", "Cooking", "Music"]}
           prompt={q => `Find TOP 4 topics for "${q}" with highest organic viral potential. Return JSON: {"topics":[{"topic":"title","gapScore":0-100,"searchVolume":"X/mo","trend":"↑X%","difficulty":"Easy/Medium/Hard","format":"type","timing":"NOW/This week/Evergreen","estimatedViews":"range","whyItWorks":"why","titleSuggestion":"title"}]} Sort by gapScore.`}
           sys="YouTube trend analyst. Valid JSON only."
-          renderResult={renderDemand}
-          onSave={(data) => handleSaveCampaign("demand", data)} />
+          renderResult={renderDemand} />
       )}
 
       {page === "viral" && (
@@ -1325,8 +1081,7 @@ export default function App() {
           quickPicks={["AI & Tech", "Gaming", "Fitness", "Finance"]}
           prompt={q => `Find TOP 3 viral patterns in "${q}" driving 100K+ organic views. Return JSON: {"patterns":[{"pattern":"name","heatScore":0-100,"rising":true/false,"avgViews":"range","whyItWorks":"why","gapOpportunity":"gap","actionToday":"action","titleTemplate":"template"}]}`}
           sys="YouTube content strategist. Valid JSON only."
-          renderResult={renderViral}
-          onSave={(data) => handleSaveCampaign("viral", data)} />
+          renderResult={renderViral} />
       )}
 
       {page === "gaps" && (
@@ -1334,13 +1089,8 @@ export default function App() {
           placeholder="Competitor or niche..." btnText="Analyze" fallback={demoCompetitors}
           prompt={q => `Analyze "${q}". 2 competitors, weaknesses, steal strategies. Return JSON: {"overallStrategy":"plan","quickWins":["w1","w2","w3"],"competitors":[{"name":"ch","estimatedSubs":"X","estimatedAvgViews":"X","strengths":["s1","s2","s3"],"weaknesses":["w1","w2","w3"],"audienceStealStrategy":"strategy","vulnerabilityScore":0-100}]}`}
           sys="YouTube competitive analyst. Valid JSON only."
-          renderResult={renderCompetitors}
-          onSave={(data) => handleSaveCampaign("compete", data)} />
+          renderResult={renderCompetitors} />
       )}
-
-      {page === "campaigns" && <CampaignsPage onView={handleViewCampaign} />}
-
-      {page === "campaign-detail" && <CampaignDetail campaign={viewingCampaign} onBack={() => setPage("campaigns")} />}
 
       <div style={{ textAlign: "center", padding: "14px", borderTop: `1px solid ${T.b}`, fontSize: 9, color: T.td }}>
         <span style={{ fontFamily: "'Sora',sans-serif", fontWeight: 700, color: T.tm }}>Zupi Growth</span> — AI-powered YouTube growth. 100% organic. $0 spent.
